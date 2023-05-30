@@ -37,11 +37,20 @@ except:
         def update(self):
             pass
 
+from argparse import Namespace
+
 device = torch.device('cuda')
 
 class RAFTTransformerBackbone(nn.Module):
-    def __init__(self, args, max_iters=30, raft_hidden_size=128):
+    def __init__(self, args=None, max_iters=30, raft_hidden_size=128, image_size=[368, 768]):
         super().__init__()
+        if args is None:
+            args = Namespace(name='raft-sintel', stage='sintel', restore_ckpt=None, small=False,
+                             validation=['sintel'], lr=0.0001, num_steps=120000, batch_size=5,
+                             image_size=image_size, gpus=[0], mixed_precision=True, iters=12,
+                             wdecay=1e-05, epsilon=1e-08, clip=1.0, dropout=0.0, gamma=0.85,
+                             add_noise=False)
+
         self.raft = RAFT(args).to(device)
         self.transformer_layer = nn.TransformerEncoderLayer(d_model=raft_hidden_size, nhead=4,
                                                             batch_first=True, device=device).to(device)
@@ -69,11 +78,35 @@ class RAFTTransformerBackbone(nn.Module):
         # print("JESUS CHRIST", hidden_states.shape)
         res = self.transformer_encoder(hidden_states)[..., -1, :]
         return res.view(batch_size, h, w, -1).permute(0, 3, 1, 2)
+    
+
+    def forward_numpy(self, img1, img2, iters=12, flow_init=None, upsample=True):
+        assert img1.shape == img2.shape, "Image shapes must match"
+        assert len(img1.shape) == 3 or len(img1.shape) == 4, "Inputs should either be a single image, or a batch of them"
+        CHANNEL_NP_TO_TORCH = (0, 3, 1, 2)
+
+        image1 = torch.from_numpy(img1).to(device, dtype=torch.float32)
+        image2 = torch.from_numpy(img2).to(device, dtype=torch.float32)
+        if len(image1.shape) == 3:
+            image1, image2 = torch.unsqueeze(image1, 0), torch.unsqueeze(image2, 0)
+        image1 = torch.permute(image1, CHANNEL_NP_TO_TORCH)
+        image2 = torch.permute(image2, CHANNEL_NP_TO_TORCH)
+        
+        features = self.forward(image1, image2, iters=iters, flow_init=flow_init, upsample=upsample)
+
+        return features.detach().cpu().numpy()
 
 
 class RAFTAvgBackbone(nn.Module):
-    def __init__(self, args, max_iters=30):
+    def __init__(self, args=None, max_iters=30, image_size=[368, 768]):
         super().__init__()
+        if args is None:
+            args = Namespace(name='raft-sintel', stage='sintel', restore_ckpt=None, small=False,
+                             validation=['sintel'], lr=0.0001, num_steps=120000, batch_size=5,
+                             image_size=image_size, gpus=[0], mixed_precision=True, iters=12,
+                             wdecay=1e-05, epsilon=1e-08, clip=1.0, dropout=0.0, gamma=0.85,
+                             add_noise=False)
+        
         self.raft = RAFT(args).to(device)
         self.averaging_weights = torch.nn.Parameter(torch.rand(max_iters)).to(device)
     
@@ -90,6 +123,23 @@ class RAFTAvgBackbone(nn.Module):
         res = torch.mean(hidden_states, dim=0)
         # print(f"hidden_states: {hidden_states.shape}\t\tres: {res.shape}")
         return res
+    
+
+    def forward_numpy(self, img1, img2, iters=12, flow_init=None, upsample=True):
+        assert img1.shape == img2.shape, "Image shapes must match"
+        assert len(img1.shape) == 3 or len(img1.shape) == 4, "Inputs should either be a single image, or a batch of them"
+        CHANNEL_NP_TO_TORCH = (0, 3, 1, 2)
+
+        image1 = torch.from_numpy(img1).to(device, dtype=torch.float32)
+        image2 = torch.from_numpy(img2).to(device, dtype=torch.float32)
+        if len(image1.shape) == 3:
+            image1, image2 = torch.unsqueeze(image1, 0), torch.unsqueeze(image2, 0)
+        image1 = torch.permute(image1, CHANNEL_NP_TO_TORCH)
+        image2 = torch.permute(image2, CHANNEL_NP_TO_TORCH)
+        
+        features = self.forward(image1, image2, iters=iters, flow_init=flow_init, upsample=upsample)
+
+        return features.detach().cpu().numpy()
 
 
 if __name__ == '__main__':
@@ -124,6 +174,19 @@ if __name__ == '__main__':
 
     # Sanity Checks
 
+    img1 = np.random.random((368, 768, 3))
+    img2 = np.random.random((368, 768, 3))
+
+    backbone = RAFTAvgBackbone().to(device)
+    backbone.eval()
+    features = backbone.forward_numpy(img1, img2)
+    print(features.shape)
+    
+    backbone = RAFTTransformerBackbone()
+    features = backbone.forward_numpy(img1, img2)
+    print(features.shape)
+
+
     # train_loader = datasets.fetch_dataloader(args)
 
     # backbone = RAFTAvgBackbone(args)
@@ -134,6 +197,7 @@ if __name__ == '__main__':
     #         stdv = np.random.uniform(0.0, 5.0)
     #         image1 = (image1 + stdv * torch.randn(*image1.shape).cuda()).clamp(0.0, 255.0)
     #         image2 = (image2 + stdv * torch.randn(*image2.shape).cuda()).clamp(0.0, 255.0)
+    #     print(image1.dtype)
     #     print("#####", image1.shape, image2.shape, flow.shape)
 
     #     features = backbone(image1, image2, iters=args.iters)

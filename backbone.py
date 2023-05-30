@@ -174,46 +174,34 @@ if __name__ == '__main__':
 
     # Sanity Checks
 
-    img1 = np.random.random((368, 768, 3))
-    img2 = np.random.random((368, 768, 3))
+    # img1 = np.random.random((368, 768, 3))
+    # img2 = np.random.random((368, 768, 3))
 
-    backbone = RAFTAvgBackbone().to(device)
-    backbone.eval()
-    features = backbone.forward_numpy(img1, img2)
-    print(features.shape)
+    # backbone = RAFTAvgBackbone().to(device)
+    # backbone.eval()
+    # features = backbone.forward_numpy(img1, img2)
+    # print(features.shape)
     
-    backbone = RAFTTransformerBackbone()
-    features = backbone.forward_numpy(img1, img2)
-    print(features.shape)
+    # backbone = RAFTTransformerBackbone()
+    # features = backbone.forward_numpy(img1, img2)
+    # print(features.shape)
 
-
-    # train_loader = datasets.fetch_dataloader(args)
 
     # backbone = RAFTAvgBackbone(args)
-    # backbone.eval()
-    # for i_batch, data_blob in enumerate(train_loader):
-    #     image1, image2, flow, valid = [x.cuda() for x in data_blob]
-    #     if args.add_noise:
-    #         stdv = np.random.uniform(0.0, 5.0)
-    #         image1 = (image1 + stdv * torch.randn(*image1.shape).cuda()).clamp(0.0, 255.0)
-    #         image2 = (image2 + stdv * torch.randn(*image2.shape).cuda()).clamp(0.0, 255.0)
-    #     print(image1.dtype)
-    #     print("#####", image1.shape, image2.shape, flow.shape)
+    backbone = RAFTTransformerBackbone(args)
+    backbone.eval()
 
-    #     features = backbone(image1, image2, iters=args.iters)
-    #     print(features.shape)
-    #     break
+    img1 = cv2.imread("demo-frames/frame_0016.png")
+    img2 = cv2.imread("demo-frames/frame_0016.png")
+    print(img1.shape)
 
-    # backbone = RAFTTransformerBackbone(args)
-    # backbone.eval()
-    # for i_batch, data_blob in enumerate(train_loader):
-    #     image1, image2, flow, valid = [x.cuda() for x in data_blob]
-    #     if args.add_noise:
-    #         stdv = np.random.uniform(0.0, 5.0)
-    #         image1 = (image1 + stdv * torch.randn(*image1.shape).cuda()).clamp(0.0, 255.0)
-    #         image2 = (image2 + stdv * torch.randn(*image2.shape).cuda()).clamp(0.0, 255.0)
-    #     print("#####", image1.shape, image2.shape, flow.shape)
+    dim = (768, 368)
+    img1 = cv2.resize(img1, dim, interpolation=cv2.INTER_NEAREST)
+    img2 = cv2.resize(img2, dim, interpolation=cv2.INTER_NEAREST)
+    print(img1.shape)
 
-    #     features = backbone(image1, image2, iters=args.iters)
-    #     print(features.shape)
-    #     break
+    res = backbone.forward_numpy(img1, img2)
+    print(res.shape)
+    for i in range(10):
+        plt.imshow(res[0, i, ...])
+        plt.show()

@@ -51,7 +51,7 @@ class RAFTTransformerBackbone(nn.Module):
                              wdecay=1e-05, epsilon=1e-08, clip=1.0, dropout=0.0, gamma=0.85,
                              add_noise=False)
 
-        self.raft = RAFT(args).to(device)
+        self.raft = nn.DataParallel(RAFT(args), device_ids=[0]).to(device)
         self.transformer_layer = nn.TransformerEncoderLayer(d_model=raft_hidden_size, nhead=4,
                                                             batch_first=True, device=device).to(device)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer=self.transformer_layer, num_layers=3)
@@ -107,7 +107,7 @@ class RAFTAvgBackbone(nn.Module):
                              wdecay=1e-05, epsilon=1e-08, clip=1.0, dropout=0.0, gamma=0.85,
                              add_noise=False)
         
-        self.raft = RAFT(args).to(device)
+        self.raft = nn.DataParallel(RAFT(args), device_ids=[0]).to(device)
         self.averaging_weights = torch.nn.Parameter(torch.rand(max_iters)).to(device)
     
 
@@ -178,6 +178,7 @@ if __name__ == '__main__':
     img2 = np.random.random((368, 768, 3))
 
     backbone = RAFTAvgBackbone().to(device)
+    backbone.raft.load_state_dict(torch.load("raft-sintel.pth"))
     backbone.eval()
     features = backbone.forward_numpy(img1, img2)
     print(features.shape)
